@@ -1,3 +1,4 @@
+package com.qfi;
 
 public class HNTree implements Comparable<HNTree> {
 	
