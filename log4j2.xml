@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+    <Appenders>
+		<File name="Huffman" fileName="logs/huffman.log">
+			<PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %c{3}.%M(%F:%L) - %m%n" />
+		</File>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %c{3}.%M(%F:%L) - %m%n" />
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="com.qfi.huffman" additivity="false" level="ALL">
+            <AppenderRef ref="Huffman" />
+        </Logger>
+        <Root level="ALL" additivity="false">
+            <AppenderRef ref="Console" />
+        </Root>
+    </Loggers>
+</Configuration>

@@ -1,4 +1,4 @@
-package com.qfi;
+package com.qfi.huffman;
 
 public class HNode{
 	
