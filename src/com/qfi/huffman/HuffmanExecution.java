@@ -1,12 +1,22 @@
 package com.qfi.huffman;
 
-import java.io.*;
+import java.io.File;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Scanner;
+import java.io.FileWriter;
+import java.io.FileReader;
+import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.util.*;
-
+import java.util.Collections;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import org.apache.log4j.Logger;
+import java.util.PriorityQueue;
+import java.io.FileOutputStream;
 import org.apache.log4j.LogManager;
+import java.io.BufferedOutputStream;
 
 /**
  *
@@ -15,13 +25,19 @@ import org.apache.log4j.LogManager;
  */
 public class HuffmanExecution implements Runnable
 {
-	private String m_mode = "";
-	private String m_inputPath = "";
+	private String m_mode;
+	private String m_inputPath;
+	private static final String SPACE_REGEX = "\\s+";
 	private static final String COMPRESS = "COMPRESS";
 	private static final String STATISTICS_APPEND = ".";
 	private static final String DECOMPRESS = "DECOMPRESS";
 	private static final Logger m_logger = LogManager.getLogger(HuffmanExecution.class);
 
+	/**
+	 *
+	 * @param mode
+	 * @param firstPath
+	 */
 	public HuffmanExecution(String mode, String firstPath)
 	{
 		m_mode = mode;
@@ -38,6 +54,9 @@ public class HuffmanExecution implements Runnable
 		}
 	}
 
+	/**
+	 *
+	 */
 	@Override
 	public void run()
 	{
@@ -49,14 +68,7 @@ public class HuffmanExecution implements Runnable
 			File inputFile = new File(m_inputPath);
 			m_logger.info("Compressing...");
 
-			int[] counts = new int[0];
-
-			try {
-				counts = getCharFrequencies(inputFile);
-			} catch (IOException e) {
-
-				e.printStackTrace();
-			}
+			int[] counts = getCharFrequencies(inputFile);
 
 			HNTree T = getHTree(counts);
 			codes = getCode(T.root);
@@ -65,87 +77,73 @@ public class HuffmanExecution implements Runnable
 
 			//InOrderPrint(T);
 
-			BufferedWriter bw = null;
+			m_logger.info("Creating Statistics File...");
+			String statPath = "";
+			int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
 
-			try{
-				m_logger.info("Creating Statistics File...");
-				String statPath = "";
-				int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
-
-				if (lastSepIndex != -1)
-				{
-					statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
-				}
-				else
-				{
-					statPath = STATISTICS_APPEND + m_inputPath;
-				}
-
-				m_logger.debug("Statistics file path: " + statPath);
-
-				bw = new BufferedWriter(new FileWriter(statPath));
-				StatFile(T, bw);
-			}catch(IOException e){
-				e.printStackTrace();
-
-			}finally{
-				try{
-
-					if(bw != null)
-						bw.close();
-
-				}catch(IOException ex){
-					ex.printStackTrace();
-				}
+			if (lastSepIndex != -1)
+			{
+				statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
+			}
+			else
+			{
+				statPath = STATISTICS_APPEND + m_inputPath;
 			}
 
-			try{
-				m_logger.info("Creating Compressed File...");
+			m_logger.debug("Statistics file path: " + statPath);
 
-				char character;
-				HNode temp = T.root;
-				StringBuilder sb = new StringBuilder();
+			//
+			m_logger.info("Creating statistics file");
+			try (BufferedWriter bw = new BufferedWriter(new FileWriter(statPath)))
+			{
+				createStatFile(T, bw);
+			}
+			catch (Exception e)
+			{
+				m_logger.error(e, e);
+			}
 
-				try (BufferedReader inputStream = new BufferedReader(new FileReader(inputFile)))
+
+			m_logger.info("Creating Compressed File...");
+
+			char character;
+			HNode temp = T.root;
+			StringBuilder sb = new StringBuilder();
+
+			//
+			try (BufferedReader inputStream = new BufferedReader(new FileReader(inputFile)))
+			{
+				while ((character = (char) inputStream.read()) != (char) -1)
 				{
-					while ((character = (char) inputStream.read()) != (char) -1)
-					{
-						HNode n = inOrderSearch(temp, character);
-						if (n != null)
-						{
-							sb.append(n.code);
-						}
-					}
+					HNode n = inOrderSearch(temp, character);
 
-					HNode end = inOrderSearch(temp, (char) 0);
-
-					if (end != null)
+					if (n != null)
 					{
-						sb.append(end.code);
+						sb.append(n.code);
 					}
 				}
-				catch (Exception e)
-				{
-					m_logger.error(e, e);
-				}
 
-				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(inputFile));
+				HNode end = inOrderSearch(temp, (char) 0);
+
+				if (end != null)
+				{
+					sb.append(end.code);
+				}
+			}
+			catch (Exception e)
+			{
+				m_logger.error(e, e);
+			}
+
+			//
+			try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(inputFile)))
+			{
 				createCompressedFile(sb, bos);
-				bos.close();
-
-			}catch(IOException e){
-				e.printStackTrace();
-			}finally{
-
-				try{
-					if(bw != null)
-						bw.close();
-				}catch(IOException ex){
-					ex.printStackTrace();
-				}
 			}
-
-
+			catch (Exception e)
+			{
+				m_logger.error(e, e);
+			}
 		}
 		else
 		{
@@ -172,7 +170,7 @@ public class HuffmanExecution implements Runnable
 
 			Map<String, Character> freqMap = readStatFrequency(statFile);
 			statFile.delete();
-			
+
 			try
 			{
 				fileContent = Files.readAllBytes(compressedFile.toPath());
@@ -184,7 +182,7 @@ public class HuffmanExecution implements Runnable
 
 			try
 			{
-				DecompressFile(freqMap, m_inputPath, fileContent);
+				decompressFile(freqMap, m_inputPath, fileContent);
 			}
 			catch (Exception e)
 			{
@@ -203,36 +201,40 @@ public class HuffmanExecution implements Runnable
 	 * Return: void (null)
 	 *
 	 */
-	public void DecompressFile(Map<String, Character> freqMap, String filePath, byte[] compressedContent) throws IOException
+	public void decompressFile(Map<String, Character> freqMap, String filePath, byte[] compressedContent)
 	{
-		PrintWriter decompressedFile = new PrintWriter(new FileWriter(filePath));
-
-		IterableBitArray itrArr = new IterableBitArray(compressedContent);
-
-		String code = "";
-		for (boolean b : itrArr)
+		try (PrintWriter decompressedFile = new PrintWriter(new FileWriter(filePath)))
 		{
-			code += b ? "1" : "0";
+			IterableBitArray itrArr = new IterableBitArray(compressedContent);
 
-			if (freqMap.containsKey(code))
+			String code = "";
+			for (boolean b : itrArr)
 			{
-				char c = freqMap.get(code);
+				code += b ? "1" : "0";
 
-				if (c == (char) 0)
+				if (freqMap.containsKey(code))
 				{
-					return;
+					char c = freqMap.get(code);
+
+					if (c == (char) 0)
+					{
+						return;
+					}
+					decompressedFile.write(c);
+					decompressedFile.flush();
+
+					System.out.print(c);
+
+					code = "";
 				}
-				decompressedFile.write(c);
-				decompressedFile.flush();
-
-				System.out.print(c);
-
-				code = "";
 			}
-		}
 
-		decompressedFile.flush();
-		decompressedFile.close();
+			decompressedFile.flush();
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
+		}
 	}
 
 	/**
@@ -251,7 +253,7 @@ public class HuffmanExecution implements Runnable
 			while (fin.hasNextLine())
 			{
 				String line = fin.nextLine();
-				String[] parts = line.split("\\s+");
+				String[] parts = line.split(SPACE_REGEX);
 				freqMap.put(parts[5], parts[1].charAt(0));
 			}
 
@@ -272,7 +274,7 @@ public class HuffmanExecution implements Runnable
 	 * Output: Check Compress function
 	 * Return: void (null)
 	 */
-	public void createCompressedFile(StringBuilder sb, BufferedOutputStream bos) throws IOException
+	public void createCompressedFile(StringBuilder sb, BufferedOutputStream bos)
 	{
 		ByteBuffer b = ByteBuffer.allocate((sb.length() / 8) + 1);
 		b.clear();
@@ -316,44 +318,28 @@ public class HuffmanExecution implements Runnable
 		}
 
 		System.out.println(sb);
-		bos.write(b.array());
-		bos.flush();
 
-	}
-
-	/*
-	 * Description: Compress is a recursive function that checks if a HNodes' character matches the character
-	 * passed. If there is a match, the BufferedWriter prints the code that corresponds to the character along
-	 * with a space into the Compressed file.
-	 * Input: HNode (every node will be searched), char (character to search for), BufferedWriter (Compressed file)
-	 * Output: Writes into Compressed file
-	 * Return: void (null)
-	 */
-	private String compress(HNode root, char c, BufferedWriter bw) throws IOException{
-
-		if (root == null)
-			return "";
-
-		compress(root.left, c, bw);
-		if(root.ch == c)
-			return root.code;
-		compress(root.right, c, bw);
-		//end of Compress
-
-		return "";
+		try
+		{
+			bos.write(b.array());
+			bos.flush();
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
+		}
 	}
 
 	/*
 	 * Description: Brings HNTree value down to HNode level and calls StatfilePrint
 	 * Input: HNTree (root of tree), BufferedWriter (Statistics file)
-	 * Output: Check StatFilePrint function
+	 * Output: Check writeStatFile function
 	 * Return: void (null)
 	 */
-	public void StatFile(HNTree t, BufferedWriter bw) throws IOException {
-
+	public void createStatFile(HNTree t, BufferedWriter bw)
+	{
 		HNode temp = t.root;
-		StatFilePrint(temp, bw);
-		//end of StatFile
+		writeStatFile(temp, bw);
 	}
 
 	/*
@@ -364,18 +350,29 @@ public class HuffmanExecution implements Runnable
 	 * Output: Prints all character node information into file
 	 * Return: void (null)
 	 */
-	private void StatFilePrint(HNode temp, BufferedWriter bw) throws IOException {
-
+	private void writeStatFile(HNode temp, BufferedWriter bw)
+	{
 		if (temp == null)
+		{
 			return;
-		StatFilePrint(temp.left, bw);
+		}
+
+		writeStatFile(temp.left, bw);
+
 		if (temp.ch != (char) -1)
 		{
-			bw.write("Node: " + temp.ch + " Freq: " + temp.freq + " Code: " + temp.code);
-			bw.newLine();
+			try
+			{
+				bw.write("Node: " + temp.ch + " Freq: " + temp.freq + " Code: " + temp.code);
+				bw.newLine();
+			}
+			catch (Exception e)
+			{
+				m_logger.error(e, e);
+			}
 		}
-		StatFilePrint(temp.right, bw);
-		//end of StatFilePrint
+
+		writeStatFile(temp.right, bw);
 	}
 
 	/*
@@ -386,7 +383,7 @@ public class HuffmanExecution implements Runnable
 	 * Output: array of counts for each character in file
 	 * Return: int[]
 	 */
-	public int[] getCharFrequencies(File uncompressedPath) throws IOException
+	public int[] getCharFrequencies(File uncompressedPath)
 	{
 		int[] charCounts = new int[256];
 
@@ -456,13 +453,17 @@ public class HuffmanExecution implements Runnable
 	 * Output: Array of binary codes
 	 * Return: String[]
 	 */
-	public String[] getCode(HNode r){
-		if(r == null)
+	public String[] getCode(HNode r)
+	{
+		if (r == null)
+		{
 			return null;
+		}
+
 		String[] c = new String[256];
 		setCode(r, c);
+
 		return c;
-		//end of getCode
 	}
 
 	/*
@@ -472,20 +473,25 @@ public class HuffmanExecution implements Runnable
 	 * Output: HNodes will have codes data field filled
 	 * Return: void (null)
 	 */
-	private void setCode(HNode r, String[] c){
-		if(r.left != null){
+	private void setCode(HNode r, String[] c)
+	{
+		if (r.left != null)
+		{
 			r.left.code = r.code + "0";
 			setCode(r.left, c);
 		}
-		if(r.right != null){
+
+		if (r.right != null)
+		{
 			r.right.code = r.code + "1";
 			setCode(r.right, c);
 		}
-		//if leaf node
-		if(r.right == null && r.left == null)
-			c[(int)r.ch] = r.code;
 
-		//end of setCode
+		//if leaf node
+		if (r.right == null && r.left == null)
+		{
+			c[r.ch] = r.code;
+		}
 	}
 
 	/*
@@ -494,9 +500,10 @@ public class HuffmanExecution implements Runnable
 	 * Output: Check InOrder function
 	 * Return: void (null)
 	 */
-	public void InOrderPrint(HNTree n){
+	public void inOrderPrint(HNTree n)
+	{
 		HNTree tmp = n;
-		InOrder(tmp.root);
+		inOrder(tmp.root);
 		//end of InOrderPrint
 	}
 
@@ -506,36 +513,44 @@ public class HuffmanExecution implements Runnable
 	 * Output: Prints character node values to standard output
 	 * Return: void (null)
 	 */
-	private void InOrder(HNode n){
+	private void inOrder(HNode n)
+	{
 		if (n == null)
+		{
 			return;
+		}
 
-		InOrder(n.left);
+		inOrder(n.left);
 
-		//if(n.ch != ' ')
 		m_logger.debug("Node: " + n.ch + " Freq: " + n.freq + " Code: " + n.code);
 
-		InOrder(n.right);
+		inOrder(n.right);
 		//end of InOrder
 	}
 
-	private HNode inOrderSearch(HNode n, char c)
+	/**
+	 *
+	 * @param n
+	 * @param c
+	 * @return
+	 */
+	private HNode inOrderSearch(HNode node, char character)
 	{
-		if (n == null)
+		if (node == null)
 		{
 			return null;
 		}
 
-		if (n.ch == c)
+		if (node.ch == character)
 		{
-			return n;
+			return node;
 		}
 
-		HNode tmp = inOrderSearch(n.left, c);
+		HNode tmp = inOrderSearch(node.left, character);
 
 		if (tmp == null)
 		{
-			tmp = inOrderSearch(n.right, c);
+			tmp = inOrderSearch(node.right, character);
 		}
 
 		return tmp;

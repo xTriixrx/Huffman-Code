@@ -1,6 +1,5 @@
 package com.qfi.huffman;
 
-import java.io.IOException;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
 
@@ -31,22 +30,20 @@ public class HuffmanCode
 	private static final String MODE = System.getProperty("mode");
 	private static final Logger m_logger = LogManager.getLogger(HuffmanCode.class);
 
-	public static void main(String[] args) throws IOException
+	public static void main(String[] args)
 	{
-		Thread executorThread = null;
-		HuffmanExecution executor = null;
-
-		if (!isValidMode(MODE))
+		if (args.length != 1 || !isValidMode(MODE))
 		{
-			m_logger.error("Invalid arguments provided, expected exactly 2 arguments & a valid mode.");
+			m_logger.error("Invalid arguments provided, expected exactly 1 argument & a valid mode.");
 			m_logger.error("The mode should be set as a system property: -Dmode=\"COMPRESS\" or -Dmode=\"DECOMPRESS\"");
-			m_logger.error("For compression: ./huffman [inputFile] [outputFile]");
-			m_logger.error("For decompression: ./huffman [compressedFile] [statisticsFile]");
+			m_logger.error("The compressed file will be the same name as the initial input file but hidden: input.txt -> .input.txt");
+			m_logger.error("For compression: ./huffman [inputFile]");
+			m_logger.error("For decompression: ./huffman [compressedFile]");
 			return;
 		}
 
-		executor = new HuffmanExecution(MODE, args[0]);
-		executorThread = new Thread(executor);
+		HuffmanExecution executor = new HuffmanExecution(MODE, args[0]);
+		Thread executorThread = new Thread(executor);
 		executorThread.start();
 	}
 
