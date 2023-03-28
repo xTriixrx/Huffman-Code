@@ -36,7 +36,7 @@ public class HuffmanCode
 		Thread executorThread = null;
 		HuffmanExecution executor = null;
 
-		if (args.length != 2 || !isValidMode(MODE))
+		if (!isValidMode(MODE))
 		{
 			m_logger.error("Invalid arguments provided, expected exactly 2 arguments & a valid mode.");
 			m_logger.error("The mode should be set as a system property: -Dmode=\"COMPRESS\" or -Dmode=\"DECOMPRESS\"");
@@ -45,7 +45,7 @@ public class HuffmanCode
 			return;
 		}
 
-		executor = new HuffmanExecution(MODE, args[0], args[1]);
+		executor = new HuffmanExecution(MODE, args[0]);
 		executorThread = new Thread(executor);
 		executorThread.start();
 	}

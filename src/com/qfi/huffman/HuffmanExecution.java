@@ -17,67 +17,42 @@ public class HuffmanExecution implements Runnable
 {
 	private String m_mode = "";
 	private String m_inputPath = "";
-	private String m_outputPath = "";
-	private String m_compressedPath = "";
-	private String m_statisticsPath = "";
 	private static final String COMPRESS = "COMPRESS";
+	private static final String STATISTICS_APPEND = ".";
 	private static final String DECOMPRESS = "DECOMPRESS";
-	private static final String STATISTICS_APPEND = "-statistics.txt";
 	private static final Logger m_logger = LogManager.getLogger(HuffmanExecution.class);
 
-	public HuffmanExecution(String mode, String firstPath, String secondPath)
+	public HuffmanExecution(String mode, String firstPath)
 	{
 		m_mode = mode;
 
 		if (m_mode.equalsIgnoreCase(COMPRESS))
 		{
 			m_inputPath = firstPath;
-			m_outputPath = secondPath;
 			m_logger.debug("Input file path: " + m_inputPath);
-			m_logger.debug("Output compressed file path: " + m_outputPath);
 		}
 		else
 		{
-			m_compressedPath = firstPath;
-			m_statisticsPath = secondPath;
-			m_logger.debug("Compressed file path: " + m_compressedPath);
-			m_logger.debug("Statistics file path: " + m_statisticsPath);
+			m_inputPath = firstPath;
+			m_logger.debug("Compressed file path: " + m_inputPath);
 		}
 	}
 
 	@Override
 	public void run()
 	{
-//		File binaryFile = new File(m_outputPath);
-//
-//		try
-//		{
-//			byte[] fileContent = Files.readAllBytes(binaryFile.toPath());
-//			IterableBitArray itrArr = new IterableBitArray(fileContent);
-//			for (boolean b : itrArr)
-//			{
-//				System.out.print((b ? 1 : 0));
-//			}
-//		}
-//		catch (Exception e)
-//		{
-//			m_logger.error(e, e);
-//		}
-//
-//		System.exit(0);
-
 		if (m_mode.equalsIgnoreCase(COMPRESS))
 		{
 			String[] codes = null;
 
 			//compression
-			File file = new File(m_inputPath);
+			File inputFile = new File(m_inputPath);
 			m_logger.info("Compressing...");
 
 			int[] counts = new int[0];
 
 			try {
-				counts = getCharFrequencies(file);
+				counts = getCharFrequencies(inputFile);
 			} catch (IOException e) {
 
 				e.printStackTrace();
@@ -91,27 +66,24 @@ public class HuffmanExecution implements Runnable
 			//InOrderPrint(T);
 
 			BufferedWriter bw = null;
-			FileWriter fw = null;
 
 			try{
 				m_logger.info("Creating Statistics File...");
 				String statPath = "";
-				int lastSepIndex = m_outputPath.lastIndexOf(File.separator);
+				int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
 
 				if (lastSepIndex != -1)
 				{
-					statPath = m_outputPath.substring(0, lastSepIndex);
+					statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
 				}
 				else
 				{
-					statPath = m_outputPath;
+					statPath = STATISTICS_APPEND + m_inputPath;
 				}
 
 				m_logger.debug("Statistics file path: " + statPath);
-				String statFileName = statPath + STATISTICS_APPEND;
-				m_logger.debug("Statistics file name: " + statFileName);
-				fw = new FileWriter(statFileName);
-				bw = new BufferedWriter(fw);
+
+				bw = new BufferedWriter(new FileWriter(statPath));
 				StatFile(T, bw);
 			}catch(IOException e){
 				e.printStackTrace();
@@ -121,8 +93,6 @@ public class HuffmanExecution implements Runnable
 
 					if(bw != null)
 						bw.close();
-					if(fw != null)
-						fw.close();
 
 				}catch(IOException ex){
 					ex.printStackTrace();
@@ -131,11 +101,36 @@ public class HuffmanExecution implements Runnable
 
 			try{
 				m_logger.info("Creating Compressed File...");
-				fw = new FileWriter(m_outputPath);
-				File output = new File(m_outputPath);
-				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(output));
+
+				char character;
 				HNode temp = T.root;
-				createCompressedFile(temp, file, bos);
+				StringBuilder sb = new StringBuilder();
+
+				try (BufferedReader inputStream = new BufferedReader(new FileReader(inputFile)))
+				{
+					while ((character = (char) inputStream.read()) != (char) -1)
+					{
+						HNode n = inOrderSearch(temp, character);
+						if (n != null)
+						{
+							sb.append(n.code);
+						}
+					}
+
+					HNode end = inOrderSearch(temp, (char) 0);
+
+					if (end != null)
+					{
+						sb.append(end.code);
+					}
+				}
+				catch (Exception e)
+				{
+					m_logger.error(e, e);
+				}
+
+				BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(inputFile));
+				createCompressedFile(sb, bos);
 				bos.close();
 
 			}catch(IOException e){
@@ -145,8 +140,6 @@ public class HuffmanExecution implements Runnable
 				try{
 					if(bw != null)
 						bw.close();
-					if(fw != null)
-						fw.close();
 				}catch(IOException ex){
 					ex.printStackTrace();
 				}
@@ -157,12 +150,41 @@ public class HuffmanExecution implements Runnable
 		else
 		{
 			m_logger.info("Decompressing...");
-			File compressedFile = new File(m_compressedPath);
-			File statFile = new File(m_statisticsPath);
+			File compressedFile = new File(m_inputPath);
+
+			String statPath = "";
+			int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
+
+			if (lastSepIndex != -1)
+			{
+				statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
+			}
+			else
+			{
+				statPath = STATISTICS_APPEND + m_inputPath;
+			}
+
+			m_logger.debug("Statistics file path: " + statPath);
+
+			File statFile = new File(statPath);
+
+			byte[] fileContent = null;
+
+			Map<String, Character> freqMap = readStatFrequency(statFile);
+			statFile.delete();
+			
+			try
+			{
+				fileContent = Files.readAllBytes(compressedFile.toPath());
+			}
+			catch (Exception e)
+			{
+				m_logger.error(e, e);
+			}
 
 			try
 			{
-				DecompressFile(statFile, compressedFile);
+				DecompressFile(freqMap, m_inputPath, fileContent);
 			}
 			catch (Exception e)
 			{
@@ -174,32 +196,6 @@ public class HuffmanExecution implements Runnable
 	}
 
 	/*
-	 * Description: parseFile takes the statistics file that is found in Documents and searches for the
-	 * character binary code specified by searchStr and once found, prints the character to standard output
-	 * Input: File (statistics file), String (binary code)
-	 * Output: Prints characters to standard output
-	 * Return: void (null)
-	 */
-	public void parseFile(File file1, String searchStr) throws IOException {
-		BufferedReader inputStream = new BufferedReader(new FileReader(file1));
-		String s;
-		Scanner scan = new Scanner(inputStream);
-		while(inputStream.ready())
-		{
-			while(scan.hasNext()){
-				scan.next();
-				String l = scan.next();
-				for(int i = 0; i < 3; i++)
-					scan.next();
-				String code = scan.next();
-				if(code.equals(searchStr))
-					System.out.print(l);
-			}
-		}
-		//end of parseFile
-	}
-
-	/*
 	 * Description: Scans the compressed file for each binary code until the EOF. As each line is read,
 	 * the string is passed to parseFile along with the statistics file.
 	 * Input: File (statisics.txt), File (compressed.txt)
@@ -207,51 +203,43 @@ public class HuffmanExecution implements Runnable
 	 * Return: void (null)
 	 *
 	 */
-	public void DecompressFile(File statFile, File compressedFile) throws IOException
+	public void DecompressFile(Map<String, Character> freqMap, String filePath, byte[] compressedContent) throws IOException
 	{
-		//String c;
-		char l;
+		PrintWriter decompressedFile = new PrintWriter(new FileWriter(filePath));
 
-		//Scanner scan = new Scanner(compressedFile);
-		Map<String, Character> freqMap = readStatFrequency(statFile);
+		IterableBitArray itrArr = new IterableBitArray(compressedContent);
 
-		try
+		String code = "";
+		for (boolean b : itrArr)
 		{
-			byte[] fileContent = Files.readAllBytes(compressedFile.toPath());
-			IterableBitArray itrArr = new IterableBitArray(fileContent);
+			code += b ? "1" : "0";
 
-			String code = "";
-			for (boolean b : itrArr)
+			if (freqMap.containsKey(code))
 			{
-				code += b ? "1" : "0";
+				char c = freqMap.get(code);
 
-				if (freqMap.containsKey(code))
+				if (c == (char) 0)
 				{
-					char c = freqMap.get(code);
-
-					if (c == (char) 0)
-					{
-						return;
-					}
-
-					System.out.print(c);
-
-					code = "";
+					return;
 				}
+				decompressedFile.write(c);
+				decompressedFile.flush();
+
+				System.out.print(c);
+
+				code = "";
 			}
 		}
-		catch (Exception e)
-		{
-			m_logger.error(e, e);
-		}
 
-//		while(scan.hasNext()){
-//			c = scan.next();
-//			parseFile(statFile, c);
-//		}
-		//end of DecompressFile
+		decompressedFile.flush();
+		decompressedFile.close();
 	}
 
+	/**
+	 *
+	 * @param statFile -
+	 * @return {@code Map<String, Character>}
+	 */
 	private Map<String, Character> readStatFrequency(File statFile)
 	{
 		Map<String, Character> freqMap = new HashMap<>();
@@ -284,72 +272,53 @@ public class HuffmanExecution implements Runnable
 	 * Output: Check Compress function
 	 * Return: void (null)
 	 */
-	public void createCompressedFile(HNode root, File file, BufferedOutputStream bos) throws IOException
+	public void createCompressedFile(StringBuilder sb, BufferedOutputStream bos) throws IOException
 	{
-		char character;
+		ByteBuffer b = ByteBuffer.allocate((sb.length() / 8) + 1);
+		b.clear();
 
-		try (BufferedReader inputStream = new BufferedReader(new FileReader(file)))
+		byte data = 0;
+		int bitIndex = 8;
+
+		for (char bit : sb.toString().toCharArray())
 		{
-			StringBuilder sb = new StringBuilder();
-			while ((character = (char) inputStream.read()) != (char) -1)
+			System.out.println("Char: " + bit);
+
+			if (bit == '1')
 			{
-				HNode n = inOrderSearch(root, character);
-				if (n != null)
-				{
-					sb.append(n.code);
-				}
+				data |= (1 << (bitIndex - 1));
 			}
-			HNode end = inOrderSearch(root, (char) 0);
-			sb.append(end.code);
-
-			ByteBuffer b = ByteBuffer.allocate((sb.length() / 8) + 1);
-			b.clear();
-
-			byte data = 0;
-			int bitIndex = 8;
-
-			for (char bit : sb.toString().toCharArray())
-			{
-				System.out.println("Char: " + bit);
-
-				if (bit == '1')
-				{
-					data |= (1 << (bitIndex - 1));
-				}
-				bitIndex--;
+			bitIndex--;
 
 //				String s1 = String.format("%8s", Integer.toBinaryString(data & 0xFF)).replace(' ', '0');
 //				System.out.println(s1);
 
-				if (bitIndex == 0)
-				{
-//					System.out.println("CLEARING!");
-					byte d = data;
-					bitIndex = 8;
-					b.put(d);
-					data = 0;
-				}
-			}
-
-			if (data != 0)
+			if (bitIndex == 0)
 			{
-				b.put(data);
+//				System.out.println("CLEARING!");
+				byte d = data;
+				bitIndex = 8;
+				b.put(d);
+				data = 0;
 			}
-
-			for (byte byteData : b.array())
-			{
-				String s1 = String.format("%8s", Integer.toBinaryString(byteData & 0xFF)).replace(' ', '0');
-				System.out.println(s1);
-//				System.out.println(Integer.toHexString(byteData));
-			}
-			System.out.println(sb);
-			bos.write(b.array());
-			bos.flush();
 		}
-		catch (Exception e)
+
+		if (data != 0)
 		{
-			m_logger.error(e, e);
+			b.put(data);
 		}
+
+		for (byte byteData : b.array())
+		{
+			String s1 = String.format("%8s", Integer.toBinaryString(byteData & 0xFF)).replace(' ', '0');
+			System.out.println(s1);
+//				System.out.println(Integer.toHexString(byteData));
+		}
+
+		System.out.println(sb);
+		bos.write(b.array());
+		bos.flush();
+
 	}
 
 	/*
