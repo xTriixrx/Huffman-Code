@@ -62,132 +62,140 @@ public class HuffmanExecution implements Runnable
 	{
 		if (m_mode.equalsIgnoreCase(COMPRESS))
 		{
-			String[] codes = null;
+			compress();
+			return;
+		}
 
-			//compression
-			File inputFile = new File(m_inputPath);
-			m_logger.info("Compressing...");
+		decompress();
+	}
 
-			int[] counts = getCharFrequencies(inputFile);
+	private void compress()
+	{
+		m_logger.info("Beginning compression of file at path " + m_inputPath + ".");
 
-			HNTree T = getHTree(counts);
-			codes = getCode(T.root);
+		//compression
+		File inputFile = new File(m_inputPath);
 
-			HNode r = T.root;
+		int[] counts = getCharFrequencies(inputFile);
 
-			//InOrderPrint(T);
+		HuffmanNode root = generateTree(counts);
+		String[] codes = getCode(root);
 
-			m_logger.info("Creating Statistics File...");
-			String statPath = "";
-			int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
+		m_logger.info("Creating hidden statistics file.");
 
-			if (lastSepIndex != -1)
-			{
-				statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
-			}
-			else
-			{
-				statPath = STATISTICS_APPEND + m_inputPath;
-			}
+		String statPath;
+		int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
 
-			m_logger.debug("Statistics file path: " + statPath);
-
-			//
-			m_logger.info("Creating statistics file");
-			try (BufferedWriter bw = new BufferedWriter(new FileWriter(statPath)))
-			{
-				createStatFile(T, bw);
-			}
-			catch (Exception e)
-			{
-				m_logger.error(e, e);
-			}
-
-
-			m_logger.info("Creating Compressed File...");
-
-			char character;
-			HNode temp = T.root;
-			StringBuilder sb = new StringBuilder();
-
-			//
-			try (BufferedReader inputStream = new BufferedReader(new FileReader(inputFile)))
-			{
-				while ((character = (char) inputStream.read()) != (char) -1)
-				{
-					HNode n = inOrderSearch(temp, character);
-
-					if (n != null)
-					{
-						sb.append(n.code);
-					}
-				}
-
-				HNode end = inOrderSearch(temp, (char) 0);
-
-				if (end != null)
-				{
-					sb.append(end.code);
-				}
-			}
-			catch (Exception e)
-			{
-				m_logger.error(e, e);
-			}
-
-			//
-			try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(inputFile)))
-			{
-				createCompressedFile(sb, bos);
-			}
-			catch (Exception e)
-			{
-				m_logger.error(e, e);
-			}
+		if (lastSepIndex != -1)
+		{
+			statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
 		}
 		else
 		{
-			m_logger.info("Decompressing...");
-			File compressedFile = new File(m_inputPath);
+			statPath = STATISTICS_APPEND + m_inputPath;
+		}
 
-			String statPath = "";
-			int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
+		m_logger.debug("Statistics file path: " + statPath);
 
-			if (lastSepIndex != -1)
+		//
+		m_logger.debug("Creating statistics file.");
+		try (BufferedWriter bw = new BufferedWriter(new FileWriter(statPath)))
+		{
+			createStatFile(root, bw);
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
+		}
+
+
+		m_logger.debug("Creating compressed file.");
+
+		char character;
+		HuffmanNode temp = root;
+		StringBuilder sb = new StringBuilder();
+
+		//
+		try (BufferedReader inputStream = new BufferedReader(new FileReader(inputFile)))
+		{
+			while ((character = (char) inputStream.read()) != (char) -1)
 			{
-				statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
+				HuffmanNode n = inOrderSearch(temp, character);
+
+				if (n != null)
+				{
+					sb.append(n.getCode());
+				}
 			}
-			else
+
+			HuffmanNode end = inOrderSearch(temp, (char) 0);
+
+			if (end != null)
 			{
-				statPath = STATISTICS_APPEND + m_inputPath;
+				sb.append(end.getCode());
 			}
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
+		}
 
-			m_logger.debug("Statistics file path: " + statPath);
+		//
+		try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(inputFile)))
+		{
+			createCompressedFile(sb, bos);
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
+		}
+	}
 
-			File statFile = new File(statPath);
+	/**
+	 *
+	 */
+	private void decompress()
+	{
+		m_logger.info("Decompressing...");
+		File compressedFile = new File(m_inputPath);
 
-			byte[] fileContent = null;
+		String statPath = "";
+		int lastSepIndex = m_inputPath.lastIndexOf(File.separator);
 
-			Map<String, Character> freqMap = readStatFrequency(statFile);
-			statFile.delete();
+		if (lastSepIndex != -1)
+		{
+			statPath = m_inputPath.substring(0, lastSepIndex) + STATISTICS_APPEND + m_inputPath.substring(lastSepIndex, m_inputPath.length() - 1);
+		}
+		else
+		{
+			statPath = STATISTICS_APPEND + m_inputPath;
+		}
 
-			try
-			{
-				fileContent = Files.readAllBytes(compressedFile.toPath());
-			}
-			catch (Exception e)
-			{
-				m_logger.error(e, e);
-			}
+		m_logger.debug("Statistics file path: " + statPath);
 
-			try
-			{
-				decompressFile(freqMap, m_inputPath, fileContent);
-			}
-			catch (Exception e)
-			{
-				m_logger.error(e, e);
-			}
+		File statFile = new File(statPath);
+
+		byte[] fileContent = null;
+
+		Map<String, Character> freqMap = readStatFrequency(statFile);
+		statFile.delete();
+
+		try
+		{
+			fileContent = Files.readAllBytes(compressedFile.toPath());
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
+		}
+
+		try
+		{
+			decompressFile(freqMap, m_inputPath, fileContent);
+		}
+		catch (Exception e)
+		{
+			m_logger.error(e, e);
 		}
 
 		m_logger.info("Done!");
@@ -290,14 +298,11 @@ public class HuffmanExecution implements Runnable
 			{
 				data |= (1 << (bitIndex - 1));
 			}
-			bitIndex--;
 
-//				String s1 = String.format("%8s", Integer.toBinaryString(data & 0xFF)).replace(' ', '0');
-//				System.out.println(s1);
+			bitIndex--;
 
 			if (bitIndex == 0)
 			{
-//				System.out.println("CLEARING!");
 				byte d = data;
 				bitIndex = 8;
 				b.put(d);
@@ -331,18 +336,6 @@ public class HuffmanExecution implements Runnable
 	}
 
 	/*
-	 * Description: Brings HNTree value down to HNode level and calls StatfilePrint
-	 * Input: HNTree (root of tree), BufferedWriter (Statistics file)
-	 * Output: Check writeStatFile function
-	 * Return: void (null)
-	 */
-	public void createStatFile(HNTree t, BufferedWriter bw)
-	{
-		HNode temp = t.root;
-		writeStatFile(temp, bw);
-	}
-
-	/*
 	 * Description: Recursive function that goes through every node, searching for any nodes in the tree
 	 * that have character values assigned to them (non-intermediate nodes). Once this node is found, the
 	 * BufferedWriter prints the HNode information into the Statistics file.
@@ -350,20 +343,20 @@ public class HuffmanExecution implements Runnable
 	 * Output: Prints all character node information into file
 	 * Return: void (null)
 	 */
-	private void writeStatFile(HNode temp, BufferedWriter bw)
+	private void createStatFile(HuffmanNode temp, BufferedWriter bw)
 	{
 		if (temp == null)
 		{
 			return;
 		}
 
-		writeStatFile(temp.left, bw);
+		createStatFile(temp.getLeft(), bw);
 
-		if (temp.ch != (char) -1)
+		if (temp.getCharacter() != (char) -1)
 		{
 			try
 			{
-				bw.write("Node: " + temp.ch + " Freq: " + temp.freq + " Code: " + temp.code);
+				bw.write("Node: " + temp.getCharacter() + " Freq: " + temp.getFrequency() + " Code: " + temp.getCode());
 				bw.newLine();
 			}
 			catch (Exception e)
@@ -372,7 +365,7 @@ public class HuffmanExecution implements Runnable
 			}
 		}
 
-		writeStatFile(temp.right, bw);
+		createStatFile(temp.getRight(), bw);
 	}
 
 	/*
@@ -410,16 +403,16 @@ public class HuffmanExecution implements Runnable
 	}
 
 	/*
-	 * Description: Creates Huffman Tree of HNTrees (or HNodes that are linked). Using a Min Priority Queue,
-	 * a node is created based on the array of counts that was made in CharFreq function. After building tree
-	 * the function returns the root node.
+	 * Description: Creates Huffman Tree of HuffmanNode objects. Using a min priority queue, a node is created based on
+	 * the array of character frequency counts. After building the tree the function returns the root node.
+	 *
 	 * Input: int[] (count array)
 	 * Output: The root of the Huffman Tree
-	 * Return: HNTree
+	 * Return: HuffmanNode
 	 */
-	public HNTree getHTree(int[] charFrequencies)
+	public HuffmanNode generateTree(int[] charFrequencies)
 	{
-		PriorityQueue<HNTree> q = new PriorityQueue<>(Collections.reverseOrder());
+		PriorityQueue<HuffmanNode> q = new PriorityQueue<>(Collections.reverseOrder());
 
 		for (int i = 0; i < charFrequencies.length; i++)
 		{
@@ -429,18 +422,20 @@ public class HuffmanExecution implements Runnable
 				int frequency = charFrequencies[i];
 
 				m_logger.trace("Adding '" + character + "' with frequency of " + frequency + " to priority queue.");
-				q.add(new HNTree(frequency, character));
+				q.add(new HuffmanNode(frequency, character));
 			}
 		}
 
 		// Add a NUL character into list to send to represent end of compressed file
-		q.add(new HNTree(1, (char) 0));
+		q.add(new HuffmanNode(1, (char) 0));
 
 		while (q.size() > 1)
 		{
-			HNTree t1 = q.remove();
-			HNTree t2 = q.remove();
-			q.add(new HNTree(t1, t2));
+			HuffmanNode h1 = q.remove();
+			HuffmanNode h2 = q.remove();
+			HuffmanNode m = new HuffmanNode(h1, h2);
+
+			q.add(m);
 		}
 
 		return q.remove();
@@ -453,7 +448,7 @@ public class HuffmanExecution implements Runnable
 	 * Output: Array of binary codes
 	 * Return: String[]
 	 */
-	public String[] getCode(HNode r)
+	public String[] getCode(HuffmanNode r)
 	{
 		if (r == null)
 		{
@@ -473,59 +468,25 @@ public class HuffmanExecution implements Runnable
 	 * Output: HNodes will have codes data field filled
 	 * Return: void (null)
 	 */
-	private void setCode(HNode r, String[] c)
+	private void setCode(HuffmanNode r, String[] c)
 	{
-		if (r.left != null)
+		if (r.getLeft() != null)
 		{
-			r.left.code = r.code + "0";
-			setCode(r.left, c);
+			r.getLeft().setCode(r.getCode() + "0");
+			setCode(r.getLeft(), c);
 		}
 
-		if (r.right != null)
+		if (r.getRight() != null)
 		{
-			r.right.code = r.code + "1";
-			setCode(r.right, c);
+			r.getRight().setCode(r.getCode() + "1");
+			setCode(r.getRight(), c);
 		}
 
-		//if leaf node
-		if (r.right == null && r.left == null)
+		// if leaf node
+		if (r.getRight() == null && r.getLeft() == null)
 		{
-			c[r.ch] = r.code;
+			c[r.getCharacter()] = r.getCode();
 		}
-	}
-
-	/*
-	 * Description: Lowers level of HNTree to HNode
-	 * Input: HNTree (root)
-	 * Output: Check InOrder function
-	 * Return: void (null)
-	 */
-	public void inOrderPrint(HNTree n)
-	{
-		HNTree tmp = n;
-		inOrder(tmp.root);
-		//end of InOrderPrint
-	}
-
-	/*
-	 * Description: Recursive function to test printing of character nodes
-	 * Input: HNode (checks all nodes)
-	 * Output: Prints character node values to standard output
-	 * Return: void (null)
-	 */
-	private void inOrder(HNode n)
-	{
-		if (n == null)
-		{
-			return;
-		}
-
-		inOrder(n.left);
-
-		m_logger.debug("Node: " + n.ch + " Freq: " + n.freq + " Code: " + n.code);
-
-		inOrder(n.right);
-		//end of InOrder
 	}
 
 	/**
@@ -534,23 +495,23 @@ public class HuffmanExecution implements Runnable
 	 * @param c
 	 * @return
 	 */
-	private HNode inOrderSearch(HNode node, char character)
+	private HuffmanNode inOrderSearch(HuffmanNode node, char character)
 	{
 		if (node == null)
 		{
 			return null;
 		}
 
-		if (node.ch == character)
+		if (node.getCharacter() == character)
 		{
 			return node;
 		}
 
-		HNode tmp = inOrderSearch(node.left, character);
+		HuffmanNode tmp = inOrderSearch(node.getLeft(), character);
 
 		if (tmp == null)
 		{
-			tmp = inOrderSearch(node.right, character);
+			tmp = inOrderSearch(node.getRight(), character);
 		}
 
 		return tmp;

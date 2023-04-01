@@ -1,24 +1,25 @@
 package com.qfi.huffman;
 
+import java.io.File;
 import org.apache.log4j.Logger;
 import org.apache.log4j.LogManager;
 
 /**
- * This program is a Huffman Encoding Implementation using HNodes and a HNTree class which joins
- * all HNodes together. The program prompts the user to choose whether to Compress or Decompress a file.
+ * This program is a Huffman Encoding Implementation using the HuffmanNode object. The program prompts the user to
+ * choose whether to compress or decompress a file.
+ *
  * COMPRESSION:
- * The Compression algorithm finds the frequency of each character, creates the HNodes for each character
- * then builds the Huffman Tree composing of the HNTree class. To move to the HNode level, simply from a HNTree
- * object move to its root data value EX: HNode r = HNTree.root; After creating the tree, the Compression algorithm
- * then creates a statistics file and compressed file into the Documents folder.
+ * The compression algorithm finds the frequency of each character, creates the HuffmanNodes for each character
+ * then builds a tree composing of the HuffmanNode class created. After creating the tree, the compression algorithm
+ * then creates a statistics file of the same path and name of the input file but as a hidden file and the uncompressed
+ * input file will be compressed within the same path that was given to the application.
+ *
  * DECOMPRESSION:
- * The Decompression algorithm takes both a statistics file and compressed file from the Documents folder. The 
- * algorithm first reads from the compressed file by each binary value that corresponds to a letter value. Then
- * it reads from the statistics file and finds the letter that corresponds to the binary number found in the 
- * compressed file by comparing the binary numbers of each letter in the statistics file. Once a match is found
- * the character is printed out to standard output.
- * NOTE: If you do not have statistics.txt and compressed.txt files to begin with in Documents, the program will
- * crash since the files do not exist.
+ * The decompression algorithm ingests the previously compressed file path and assumes the statistics file to be in the
+ * same path as where the compress file path is. The algorithm first reads from the statistics file and generates a map
+ * associated with each character and the string based binary encoding that was used for that character. Once the map is
+ * created, the statistics file will be deleted from the file system, the compressed file will be read completely and each
+ * bit will be iterated over in order to determine the appropriate characters that need to be rewritten back to the file.
  * 
  * @author Vincent.Nigro
  * @version 1.0.0
@@ -42,9 +43,27 @@ public class HuffmanCode
 			return;
 		}
 
+		if (!isValidFile(args[0]))
+		{
+			m_logger.error("The file at path " + args[0] + " does not exist.");
+			return;
+		}
+
 		HuffmanExecution executor = new HuffmanExecution(MODE, args[0]);
 		Thread executorThread = new Thread(executor);
 		executorThread.start();
+	}
+
+	/**
+	 * Checks and returns a flag representing if the provided file path is valid.
+	 *
+	 * @param filePath - A String representing some path to a file to be compressed or decompressed.
+	 * @return boolean - A flag representing if the provided path is a valid file.
+	 */
+	private static boolean isValidFile(String filePath)
+	{
+		File f = new File(filePath);
+		return f.exists();
 	}
 
 	/**
